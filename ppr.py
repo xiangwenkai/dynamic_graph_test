@@ -61,9 +61,9 @@ def construct_sparse(neighbors, weights, shape):
     return sp.coo_matrix((np.concatenate(weights), (i, j)), shape)
 
 
-def DynamicSNE(G, delta_G, epsilon, alpha, S=[1,2,3],p_pre=None, r_pre=None):
+def DynamicSNE(G, delta_G, epsilon, alpha, S=[1, 2, 3], p_pre=None, r_pre=None):
     for changes in delta_G:
-        u, v, op = changes[0],changes[1],changes[2]
+        u, v, op = changes[0], changes[1], changes[2]
         flag = v in list(G.nodes)
         for s in S:
             if op == 'i':
@@ -82,23 +82,17 @@ def DynamicSNE(G, delta_G, epsilon, alpha, S=[1,2,3],p_pre=None, r_pre=None):
 
 def calc_A_hat(adj_matrix: sp.spmatrix) -> sp.spmatrix:
     nnodes = adj_matrix.shape[0]
-    A = adj_matrix + sp.eye(nnodes)
+    # A = adj_matrix + sp.eye(nnodes)
+    A = adj_matrix
     D_vec = np.sum(A, axis=1).A1
-    D_vec_invsqrt_corr = 1 / np.sqrt(D_vec)
+    D_vec_invsqrt_corr = 1. / D_vec
     D_invsqrt_corr = sp.diags(D_vec_invsqrt_corr)
-    return D_invsqrt_corr @ A @ D_invsqrt_corr
+    return  D_invsqrt_corr @ A
 
 
 def calc_ppr_exact(adj_matrix: sp.spmatrix, alpha: float) -> np.ndarray:
     nnodes = adj_matrix.shape[0]
+
     M = calc_A_hat(adj_matrix)
     A_inner = sp.eye(nnodes) - (1 - alpha) * M
     return alpha * np.linalg.inv(A_inner.toarray())
-
-
-
-
-
-
-
-
