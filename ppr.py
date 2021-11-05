@@ -62,54 +62,78 @@ def construct_sparse(neighbors, weights, shape):
     return sp.coo_matrix((np.concatenate(weights), (i, j)), shape)
 
 
-def ForwardPush(p, r, s, G, epsilon,alpha,beta=0.5):
-    enque = [s]
-    while len(enque)>0:
+def ForwardPush(p, r, s, G, epsilon, alpha):
+    enque = s
+    while len(enque) > 0:
         snode = enque.pop()
-        res = r[snode]
-        p[snode] += alpha*res
-        r[snode] = (1-alpha)*r[snode]*beta
+        p[snode] += alpha*r[snode]
+        res = (1 - alpha) * r[snode] / G.degree(snode)
         for vnode in list(G.adj[snode]):
-            r[vnode] += (1-alpha)*r[snode]*(1-beta)/G.degree(snode)
+            r[vnode] += res
             res_vnode = r[vnode]
-            if abs(res_vnode) > epsilon * G.degree(vnode):
+            if abs(res_vnode) >= epsilon * G.degree(vnode):
                 if vnode not in enque:
                     enque.append(vnode)
+        r[snode] = 0.
     return p, r
 
+def add_point(G, p, r, unode, epsilon, alpha):
+    p[unode] = dict(zip(G.nodes, [0] * len(G.nodes)))
+    r[unode] = dict(zip(G.nodes, [0] * len(G.nodes)))
+    for i in list(G.nodes):
+        p[i][unode] = 0
+        r[i][unode] = 0
+    r[unode][unode] = 1
+    p[unode], r[unode] = ForwardPush(p=p[unode], r=r[unode], s=[unode], G=G, epsilon=epsilon, alpha=alpha)
 
-def DynamicSNE(G, delta_G, epsilon, alpha, S=[1,2,3],p_pre=None, r_pre=None):
+
+def DynamicSNE(G, delta_G, epsilon, alpha, S, p_pre=None, r_pre=None):
     for change in delta_G:
-        u, v, op = change[0],change[1],change[2]
-        flag = v in list(G.nodes)
+        u, v, op = change[0], change[1], change[2]
         if op == 'i':
             G.add_edge(u, v)
         if op == 'd':
             G.remove_edge(u, v)
-        for s in S:
+        if u not in r_pre[S[0]]:
+            add_point(G, p_pre, r_pre, v, epsilon, alpha)
+        if v not in r_pre[S[0]]:
+            add_point(G, p_pre, r_pre, v, epsilon, alpha)
+    for s in S:
+        for change in delta_G:
+            u, v, op = change[0], change[1], change[2]
             if op == 'i':
-                delta_p = p_pre[s][u] / (G.degree[u] - 1)
+                if G.degree[u]==1:
+                    continue
+                delta_pu = p_pre[s][u] / (G.degree[u] - 1)
+                if G.degree[v] == 1:
+                    continue
+                delta_pv = p_pre[s][v] / (G.degree[v] - 1)
             if op == 'd':
-                delta_p = -p_pre[s][u] / (G.degree[u] + 1)
-            p_pre[s][u] += delta_p
-            r_pre[s][u] = r_pre[s][u] - delta_p / alpha
-            if flag:
-                r_pre[s][v] = r_pre[s][v] + delta_p / alpha - delta_p
-            # p_pre[s], r_pre[s] = _calc_ppr_node(s, G, alpha=0.1, epsilon=epsilon, p_pre=p_pre[s], r_pre=r_pre[s])
-            p_pre[s], r_pre[s] = ForwardPush(p=p_pre[s], r=r_pre[s], s=s, G=G, epsilon=epsilon, alpha=alpha)
+                delta_pu = -p_pre[s][u] / (G.degree[u] + 1)
+                delta_pv = -p_pre[s][v] / (G.degree[v] + 1)
+            p_pre[s][u] += delta_pu
+            r_pre[s][u] -= delta_pu / alpha
+            r_pre[s][v] += delta_pu / alpha - delta_pu
+
+            p_pre[s][v] += delta_pv
+            r_pre[s][v] -= delta_pv / alpha
+            r_pre[s][u] += delta_pv / alpha - delta_pv
+
+        p_pre[s], r_pre[s] = ForwardPush(p=p_pre[s], r=r_pre[s], s=[u], G=G, epsilon=epsilon, alpha=alpha)
     return p_pre, r_pre
 
 
-def DaynamicPPE(G, delta_G0, S, epsilon, alpha, p, r):
-    # p = {}
-    # r = {}
-    # for s in S:
-    #     nnodes = len(G.nodes)
-    #     p[s] = dict(zip(G.nodes, [0]*nnodes))
-    #     r[s] = dict(zip(G.nodes, [0]*nnodes))
-    #     r[s][s] = 1
-    #     p[s],r[s] = ForwardPush(p[s], r[s], s, G, epsilon=epsilon, alpha=alpha)
-    p, r = DynamicSNE(G, delta_G0, epsilon, alpha, S=S, p_pre=p, r_pre=r)
+def DaynamicPPE(G, S, epsilon, alpha, delta_G0=None):
+    p = {}
+    r = {}
+    for s in G.nodes:
+        nnodes = len(G.nodes)
+        p[s] = dict(zip(G.nodes, [0]*nnodes))
+        r[s] = dict(zip(G.nodes, [0]*nnodes))
+        r[s][s] = 1.
+        p[s], r[s] = ForwardPush(p[s], r[s], [s], G, epsilon=epsilon, alpha=0.1)
+    if delta_G0 is not None:
+        p, r = DynamicSNE(G, delta_G0, epsilon, alpha, S=S, p_pre=p, r_pre=r)
     return p, r
 
 
