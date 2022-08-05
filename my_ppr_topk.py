@@ -151,8 +151,8 @@ def ForwardPushUpdate(p, r, update_node, indptr, indices, epsilon, alpha, adj_de
                         enque.append(vnode)
             r[unode] = 0
 
-    p_topk = sorted(p.items(), key=lambda x: x[1], reverse=True)[:k]
-    r_topk = sorted(r.items(), key=lambda x: x[1], reverse=True)[:k]
+    p_topk = sorted(p.items(), key=lambda x: abs(x[1]), reverse=True)[:k]
+    r_topk = sorted(r.items(), key=lambda x: abs(x[1]), reverse=True)[:k]
     p = Dict.empty(key_type=numba.types.int64,
                       value_type=numba.types.float32)
     r = Dict.empty(key_type=numba.types.int64,
